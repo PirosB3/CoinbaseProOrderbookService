@@ -11,7 +11,3 @@ type orderbookSortedKey struct {
 }
 
 type sortByOrderbookPrice []*orderbookSortedKey
-
-func (a sortByOrderbookPrice) Len() int           { return len(a) }
-func (a sortByOrderbookPrice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a sortByOrderbookPrice) Less(i, j int) bool { return a[i].Value < a[j].Value }

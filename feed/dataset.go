@@ -32,15 +32,50 @@ func (of *OrderbookFeed) GetProduct() (string, string) {
 	return items[0], items[1]
 }
 
+func (of *OrderbookFeed) BuyQuote(amount float64) (float64, error) {
+	remaining := amount
+	baseAmountToPay := 0.0
+	for _, orderSet := range of.bids {
+
+		if remaining <= 0 {
+			return baseAmountToPay, nil
+		}
+
+		size, ok := of.bidsSizeMap[orderSet.Key]
+		if !ok {
+			log.WithField("key", orderSet.Key).Errorln("Key cannot be found in lookup table.")
+			continue
+		}
+		maxQuoteAmount := orderSet.Value * size
+		amountToPurchase := maxQuoteAmount
+		if amountToPurchase > remaining {
+			amountToPurchase = remaining
+		}
+
+		// Perform the transaction
+		remaining -= amountToPurchase
+		baseAmountToPay += amountToPurchase / orderSet.Value
+	}
+	return -1, errors.New(INSUFFICIENT_LIQUIDITY)
+}
+
+func (of *OrderbookFeed) BuyBase(amount float64) (float64, error) {
+	return of.performMarketOperation(amount, of.asks, of.asksSizeMap)
+}
+
 func (of *OrderbookFeed) SellBase(amount float64) (float64, error) {
+	return of.performMarketOperation(amount, of.bids, of.bidsSizeMap)
+}
+
+func (of *OrderbookFeed) performMarketOperation(amount float64, book sortByOrderbookPrice, sizeMap map[string]float64) (float64, error) {
 	if amount <= 0 {
 		return -1, errors.New("Amount invalid")
 	}
 	remainingAmt := amount
 	profitMade := 0.0
-	for _, orderSet := range of.bids {
+	for _, orderSet := range book {
 
-		orderSize := of.bidsSizeMap[orderSet.Key]
+		orderSize := sizeMap[orderSet.Key]
 		amountToConsume := orderSize
 		if remainingAmt <= amountToConsume {
 			amountToConsume = remainingAmt
@@ -102,13 +137,21 @@ func (of *OrderbookFeed) GetBookCount() (int, int) {
 	return len(of.bids), len(of.asks)
 }
 
-func (of *OrderbookFeed) WriteUpdate(epoch int64, bids []*Update, asks []*Update) bool {
+func (of *OrderbookFeed) setData(epoch int64, bids []*Update, asks []*Update, recreate bool) bool {
 	// Initiate a lock
 	of.updateLock.Lock()
 	defer of.updateLock.Unlock()
 
 	if epoch < of.lastEpochSeen {
 		return false
+	}
+
+	if recreate {
+		// Re-create all maps and structs
+		of.bids = nil
+		of.asks = nil
+		of.asksSizeMap = make(map[string]float64)
+		of.bidsSizeMap = make(map[string]float64)
 	}
 
 	// Write a fresh batch of updates
@@ -130,39 +173,11 @@ func (of *OrderbookFeed) WriteUpdate(epoch int64, bids []*Update, asks []*Update
 }
 
 func (of *OrderbookFeed) SetSnapshot(epoch int64, bids []*Update, asks []*Update) bool {
-	// Initiate a lock
-	of.updateLock.Lock()
-	defer of.updateLock.Unlock()
+	return of.setData(epoch, bids, asks, true)
+}
 
-	if epoch < of.lastEpochSeen {
-		return false
-	}
-
-	// Re-create all maps and structs
-	of.bids = nil
-	of.asks = nil
-	of.asksSizeMap = make(map[string]float64)
-	of.bidsSizeMap = make(map[string]float64)
-
-	// Write a fresh batch of updates
-	containsNewInsertsBids := of.writeUpdate(bids, BIDS)
-	containsNewInsertsAsks := of.writeUpdate(asks, ASKS)
-
-	// Sort the results after the update was written
-	// Sort the results after the update was written
-	if containsNewInsertsBids {
-		sort.Slice(of.bids, func(i, j int) bool {
-			return of.bids[i].Value > of.bids[j].Value
-		})
-	}
-	if containsNewInsertsAsks {
-		sort.Slice(of.asks, func(i, j int) bool {
-			return of.bids[i].Value < of.bids[j].Value
-		})
-	}
-	// Mark the last seen epoch
-	of.lastEpochSeen = epoch
-	return true
+func (of *OrderbookFeed) WriteUpdate(epoch int64, bids []*Update, asks []*Update) bool {
+	return of.setData(epoch, bids, asks, false)
 }
 
 func NewOrderbookFeed(productId string) *OrderbookFeed {
