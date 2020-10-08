@@ -33,15 +33,23 @@ func (of *OrderbookFeed) GetProduct() (string, string) {
 }
 
 func (of *OrderbookFeed) BuyQuote(amount float64) (float64, error) {
+	return of.performMarketOperationOnQuote(amount, of.bids, of.bidsSizeMap)
+}
+
+func (of *OrderbookFeed) SellQuote(amount float64) (float64, error) {
+	return of.performMarketOperationOnQuote(amount, of.asks, of.asksSizeMap)
+}
+
+func (of *OrderbookFeed) performMarketOperationOnQuote(amount float64, book sortByOrderbookPrice, sizeMap map[string]float64) (float64, error) {
 	remaining := amount
 	baseAmountToPay := 0.0
-	for _, orderSet := range of.bids {
+	for _, orderSet := range book {
 
 		if remaining <= 0 {
-			return baseAmountToPay, nil
+			break
 		}
 
-		size, ok := of.bidsSizeMap[orderSet.Key]
+		size, ok := sizeMap[orderSet.Key]
 		if !ok {
 			log.WithField("key", orderSet.Key).Errorln("Key cannot be found in lookup table.")
 			continue
@@ -56,18 +64,22 @@ func (of *OrderbookFeed) BuyQuote(amount float64) (float64, error) {
 		remaining -= amountToPurchase
 		baseAmountToPay += amountToPurchase / orderSet.Value
 	}
+	if remaining == 0 {
+		return baseAmountToPay, nil
+	}
+
 	return -1, errors.New(INSUFFICIENT_LIQUIDITY)
 }
 
 func (of *OrderbookFeed) BuyBase(amount float64) (float64, error) {
-	return of.performMarketOperation(amount, of.asks, of.asksSizeMap)
+	return of.performMarketOperationOnBase(amount, of.asks, of.asksSizeMap)
 }
 
 func (of *OrderbookFeed) SellBase(amount float64) (float64, error) {
-	return of.performMarketOperation(amount, of.bids, of.bidsSizeMap)
+	return of.performMarketOperationOnBase(amount, of.bids, of.bidsSizeMap)
 }
 
-func (of *OrderbookFeed) performMarketOperation(amount float64, book sortByOrderbookPrice, sizeMap map[string]float64) (float64, error) {
+func (of *OrderbookFeed) performMarketOperationOnBase(amount float64, book sortByOrderbookPrice, sizeMap map[string]float64) (float64, error) {
 	if amount <= 0 {
 		return -1, errors.New("Amount invalid")
 	}
@@ -87,10 +99,13 @@ func (of *OrderbookFeed) performMarketOperation(amount float64, book sortByOrder
 			return -1, errors.New("Implementation error")
 		}
 
-		if remainingAmt == 0 {
-			log.Infoln(profitMade)
-			return profitMade, nil
+		if remainingAmt <= 0 {
+			break
 		}
+
+	}
+	if remainingAmt == 0 {
+		return profitMade, nil
 	}
 	return -1, errors.New(INSUFFICIENT_LIQUIDITY)
 }

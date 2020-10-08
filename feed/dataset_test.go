@@ -137,3 +137,25 @@ func TestBuyQuote(t *testing.T) {
 		t.Errorf("Expected 0.604375 but got %f", result)
 	}
 }
+
+func TestSellQuote(t *testing.T) {
+	ob := NewOrderbookFeed("ETH-DAI")
+	bids := []*Update{
+		&Update{Price: "333.2", Size: "0.5"},
+		&Update{Price: "320", Size: "0.5"},
+		&Update{Price: "310", Size: "1.5"},
+	}
+	asks := []*Update{
+		&Update{Price: "335.12", Size: "0.5"},
+	}
+	timestamp := time.Now().Unix()
+	ob.SetSnapshot(timestamp, bids, asks)
+
+	result, err := ob.SellQuote(50)
+	if err != nil {
+		t.Error(err.Error())
+	}
+	if result != 0.14920028646455 {
+		t.Errorf("Expected 0.14920028646455 but got %f", result)
+	}
+}
