@@ -1,6 +1,9 @@
 package feed
 
 import (
+	"encoding/json"
+	"math"
+	"net/http"
 	"testing"
 	"time"
 )
@@ -157,5 +160,31 @@ func TestSellQuote(t *testing.T) {
 	}
 	if result != 0.14920028646455 {
 		t.Errorf("Expected 0.14920028646455 but got %f", result)
+	}
+}
+
+func TestEndToEnd(t *testing.T) {
+	response, err := http.Get(URL)
+	defer response.Body.Close()
+	if err != nil {
+		panic(err)
+	}
+
+	var l2Data LevelTwoOrderbook
+	decoder := json.NewDecoder(response.Body)
+	decoder.Decode(&l2Data)
+
+	ob := NewOrderbookFeed("ETH-DAI")
+	bids := TransformToUpdate(l2Data.Bids)
+	asks := TransformToUpdate(l2Data.Asks)
+	ob.SetSnapshot(time.Now().Unix(), bids, asks)
+
+	for i := 10; i < 400; i += 10 {
+		quoteObtained, _ := ob.SellBase(float64(i))
+		baseObtained, _ := ob.BuyQuote(quoteObtained)
+
+		if math.Round(baseObtained) != float64(i) {
+			t.Errorf("Expcted %d but got %f", i, baseObtained)
+		}
 	}
 }
