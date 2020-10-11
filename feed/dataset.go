@@ -170,11 +170,11 @@ func (of *OrderbookFeed) GetBookCount() (int, int) {
 }
 
 func (of *OrderbookFeed) setData(epoch int64, bids []*Update, asks []*Update, recreate bool) bool {
-	// Initiate a lock
-
 	if epoch < of.lastEpochSeen {
+		log.WithField("lastEpochSeen", of.lastEpochSeen).WithField("newEpoch", epoch).Warningln("Skipping update due to race condition")
 		return false
 	}
+	of.lastEpochSeen = epoch
 
 	if recreate {
 		// Re-create all maps and structs

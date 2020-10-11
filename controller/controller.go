@@ -16,6 +16,15 @@ import (
 )
 
 const CHANNEL_BUFFER_SIZE = 20
+const TS_LAYOUT = "2006-01-02T15:04:05.000000Z"
+
+func DateStringToUnixEpoch(timestamp string) (int64, error) {
+	t, err := time.Parse(TS_LAYOUT, timestamp)
+	if err != nil {
+		return -1, err
+	}
+	return int64(t.Unix()), nil
+}
 
 var (
 	heartbeatTicker = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -101,6 +110,12 @@ func (fc *FeedController) runLoop() {
 				fc.orderbook.SetSnapshot(time.Now().Unix(), bids, asks)
 				log.WithField("numBids", len(bids)).WithField("numAsks", len(asks)).Infoln("Set new snapshot")
 			case "l2update":
+				timestamp, err := DateStringToUnixEpoch(wsType["time"].(string))
+				if err != nil {
+					log.WithField("timestamp", wsType["time"].(string)).Errorln("Incorrect date format found.")
+					continue
+				}
+
 				var bids []*feed.Update
 				var asks []*feed.Update
 				changes := wsType["changes"].([]interface{})
@@ -117,7 +132,7 @@ func (fc *FeedController) runLoop() {
 						asks = append(asks, update)
 					}
 				}
-				fc.orderbook.WriteUpdate(time.Now().Unix(), bids, asks)
+				fc.orderbook.WriteUpdate(timestamp, bids, asks)
 			case "heartbeat":
 				heartbeatTicker.WithLabelValues(fc.uuid, fc.product).Inc()
 			case "subscriptions":
