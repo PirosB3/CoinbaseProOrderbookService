@@ -6,11 +6,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
 
 const (
+	TIMEOUT_STALE_BOOK     = 5
 	INSUFFICIENT_LIQUIDITY = "INSUFFICIENT_LIQUIDITY"
 	BIDS                   = "BIDS"
 	ASKS                   = "ASKS"
@@ -44,6 +46,9 @@ func (of *OrderbookFeed) SellQuote(amount float64) (float64, error) {
 func (of *OrderbookFeed) performMarketOperationOnQuote(amount float64, book sortByOrderbookPrice, sizeMap map[string]float64) (float64, error) {
 	if !of.snapshotWasSet {
 		return -1, errors.New("A snapshot was never set, therefore the orderbook is inaccurate")
+	}
+	if (time.Now().Unix() - of.lastEpochSeen) > TIMEOUT_STALE_BOOK {
+		return -1, errors.New("Orderbook is stale")
 	}
 	if amount <= 0 {
 		return -1, errors.New("Amount invalid")
@@ -93,7 +98,9 @@ func (of *OrderbookFeed) performMarketOperationOnBase(amount float64, book sortB
 	if !of.snapshotWasSet {
 		return -1, errors.New("A snapshot was never set, therefore the orderbook is inaccurate")
 	}
-
+	if (time.Now().Unix() - of.lastEpochSeen) > TIMEOUT_STALE_BOOK {
+		return -1, errors.New("Orderbook is stale")
+	}
 	if amount <= 0 {
 		return -1, errors.New("Amount invalid")
 	}

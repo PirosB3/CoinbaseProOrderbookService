@@ -18,7 +18,7 @@ func TestCanInitialize(t *testing.T) {
 
 func TestFailsForGetPrice(t *testing.T) {
 	ob := NewOrderbookFeed("ETH-DAI")
-	ob.SetSnapshot(1, []*Update{}, []*Update{})
+	ob.SetSnapshot(time.Now().Unix(), []*Update{}, []*Update{})
 	_, err := ob.SellBase(1.2)
 	if err == nil {
 		t.Error("Expected error to exist, but it was nil")
@@ -59,13 +59,13 @@ func TestAddItem(t *testing.T) {
 
 func TestUpdate(t *testing.T) {
 	ob := NewOrderbookFeed("ETH-DAI")
-	ob.SetSnapshot(1, []*Update{}, []*Update{})
+	ob.SetSnapshot(time.Now().Unix(), []*Update{}, []*Update{})
 	numBids, numAsks := ob.GetBookCount()
 	if numBids != 0 || numAsks != 0 {
 		t.Errorf("Num bids expected as 0, but was %d. Num asks expected was 0, but was %d", numBids, numAsks)
 	}
 
-	ob.WriteUpdate(1, []*Update{
+	ob.WriteUpdate(time.Now().Unix(), []*Update{
 		&Update{Price: "333.2", Size: "0.5"},
 		&Update{Price: "310", Size: "1.5"},
 	}, []*Update{})
@@ -76,7 +76,7 @@ func TestUpdate(t *testing.T) {
 	if result != 197.6 {
 		t.Errorf("Expected 197.6 but got %f", result)
 	}
-	ob.WriteUpdate(1, []*Update{
+	ob.WriteUpdate(time.Now().Unix(), []*Update{
 		&Update{Price: "320", Size: "0.5"},
 	}, []*Update{})
 	result, err = ob.SellBase(0.6)
@@ -87,7 +87,7 @@ func TestUpdate(t *testing.T) {
 		t.Errorf("Expected 198.6 but got %f", result)
 	}
 
-	ob.WriteUpdate(1, []*Update{
+	ob.WriteUpdate(time.Now().Unix(), []*Update{
 		&Update{Price: "333.2", Size: "1.5"},
 	}, []*Update{})
 	result, err = ob.SellBase(0.6)
@@ -223,5 +223,29 @@ func TestTimestampUpdateIsWorking(t *testing.T) {
 	isUpdatedCorrectly = ob.WriteUpdate(timestamp-1, bids, asks)
 	if isUpdatedCorrectly {
 		t.Errorf("Update should not have worked due to old timestamp")
+	}
+}
+
+func TestSellQuoteWhenBookIsOld(t *testing.T) {
+	ob := NewOrderbookFeed("ETH-DAI")
+	bids := []*Update{
+		&Update{Price: "333.2", Size: "0.5"},
+		&Update{Price: "320", Size: "0.5"},
+		&Update{Price: "310", Size: "1.5"},
+	}
+	asks := []*Update{
+		&Update{Price: "335.12", Size: "0.5"},
+	}
+	timestamp := time.Now().Unix() - 6
+	ob.SetSnapshot(timestamp, bids, asks)
+
+	_, err := ob.SellQuote(50)
+	if err == nil || err.Error() != "Orderbook is stale" {
+		t.Error("Orderbook is stale but no error was raised")
+	}
+
+	_, err = ob.SellBase(50)
+	if err == nil || err.Error() != "Orderbook is stale" {
+		t.Error("Orderbook is stale but no error was raised")
 	}
 }
