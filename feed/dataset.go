@@ -22,6 +22,7 @@ type OrderbookFeed struct {
 	bidsSizeMap, asksSizeMap map[string]float64
 	lastEpochSeen            int64
 	updateLock               *sync.RWMutex
+	snapshotWasSet           bool
 }
 
 func (of *OrderbookFeed) GetProduct() (string, string) {
@@ -41,6 +42,13 @@ func (of *OrderbookFeed) SellQuote(amount float64) (float64, error) {
 }
 
 func (of *OrderbookFeed) performMarketOperationOnQuote(amount float64, book sortByOrderbookPrice, sizeMap map[string]float64) (float64, error) {
+	if !of.snapshotWasSet {
+		return -1, errors.New("A snapshot was never set, therefore the orderbook is inaccurate")
+	}
+	if amount <= 0 {
+		return -1, errors.New("Amount invalid")
+	}
+
 	remaining := amount
 	baseAmountToPay := 0.0
 	for _, orderSet := range book {
@@ -82,6 +90,10 @@ func (of *OrderbookFeed) SellBase(amount float64) (float64, error) {
 }
 
 func (of *OrderbookFeed) performMarketOperationOnBase(amount float64, book sortByOrderbookPrice, sizeMap map[string]float64) (float64, error) {
+	if !of.snapshotWasSet {
+		return -1, errors.New("A snapshot was never set, therefore the orderbook is inaccurate")
+	}
+
 	if amount <= 0 {
 		return -1, errors.New("Amount invalid")
 	}
@@ -193,7 +205,11 @@ func (of *OrderbookFeed) setData(epoch int64, bids []*Update, asks []*Update, re
 }
 
 func (of *OrderbookFeed) SetSnapshot(epoch int64, bids []*Update, asks []*Update) bool {
-	return of.setData(epoch, bids, asks, true)
+	result := of.setData(epoch, bids, asks, true)
+	if result {
+		of.snapshotWasSet = true
+	}
+	return result
 }
 
 func (of *OrderbookFeed) WriteUpdate(epoch int64, bids []*Update, asks []*Update) bool {

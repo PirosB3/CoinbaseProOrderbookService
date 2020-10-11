@@ -18,6 +18,7 @@ func TestCanInitialize(t *testing.T) {
 
 func TestFailsForGetPrice(t *testing.T) {
 	ob := NewOrderbookFeed("ETH-DAI")
+	ob.SetSnapshot(1, []*Update{}, []*Update{})
 	_, err := ob.SellBase(1.2)
 	if err == nil {
 		t.Error("Expected error to exist, but it was nil")
@@ -58,6 +59,7 @@ func TestAddItem(t *testing.T) {
 
 func TestUpdate(t *testing.T) {
 	ob := NewOrderbookFeed("ETH-DAI")
+	ob.SetSnapshot(1, []*Update{}, []*Update{})
 	numBids, numAsks := ob.GetBookCount()
 	if numBids != 0 || numAsks != 0 {
 		t.Errorf("Num bids expected as 0, but was %d. Num asks expected was 0, but was %d", numBids, numAsks)
@@ -160,6 +162,18 @@ func TestSellQuote(t *testing.T) {
 	}
 	if result != 0.14920028646455 {
 		t.Errorf("Expected 0.14920028646455 but got %f", result)
+	}
+}
+
+func TestErrorWillReturnIfNoSnapshotWasEverSet(t *testing.T) {
+	ob := NewOrderbookFeed("ETH-DAI")
+	ob.WriteUpdate(1, []*Update{
+		&Update{Price: "333.2", Size: "1.5"},
+	}, []*Update{})
+	_, err1 := ob.SellBase(0.6)
+	_, err2 := ob.BuyBase(0.6)
+	if err1 == nil || err2 == nil {
+		t.Error("No orderbook operations should be allowed if a snapshot was never set")
 	}
 }
 
