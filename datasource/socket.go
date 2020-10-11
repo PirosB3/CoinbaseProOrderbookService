@@ -17,22 +17,32 @@ import (
 
 var (
 	pricingProm = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "pricing",
-		Help: "Orderbook visualization for 50 ETH",
+		Name:      "pricing",
+		Help:      "Orderbook visualization for 50 ETH",
+		Namespace: "feed",
 	}, []string{"uuid", "market"})
 
 	updatesCounter = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "updates",
-		Help: "Shows the frequency of orderbook updates coming out of the websocket",
+		Name:      "updates",
+		Help:      "Shows the frequency of orderbook updates coming out of the websocket",
+		Namespace: "feed",
+	}, []string{"uuid", "market"})
+
+	droppedPacketsCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name:      "droppedPackets",
+		Help:      "Shows the amount of dropped packets",
+		Namespace: "feed",
 	}, []string{"uuid", "market"})
 
 	timeoutsCounter = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "timeout",
-		Help: "Shows the frequency of timeouts",
+		Name:      "timeout",
+		Help:      "Shows the frequency of timeouts",
+		Namespace: "feed",
 	}, []string{"uuid", "market"})
 	wsLatency = promauto.NewSummaryVec(prometheus.SummaryOpts{
-		Name: "websocketUpdateFrequency",
-		Help: "Shows the frequency of websocket responses",
+		Name:      "websocketUpdateFrequency",
+		Help:      "Shows the frequency of websocket responses",
+		Namespace: "feed",
 	}, []string{"uuid", "market"})
 )
 
@@ -74,12 +84,6 @@ func (ws *CoinbaseProWebsocket) makeSubscriptionMessage() feed.MessageSubscripti
 		Channels: []interface{}{
 			"level2",
 			"heartbeat",
-			feed.TickerChannel{
-				Name: "ticker",
-				ProductIds: []string{
-					ws.product,
-				},
-			},
 		},
 	}
 	return subscription
@@ -105,6 +109,7 @@ func (ws *CoinbaseProWebsocket) runLoop() {
 			case ws.outChan <- msgOut:
 			default:
 				log.Warningln("Websocket has no consumer for outgoing messages, dropping the message.")
+				droppedPacketsCounter.WithLabelValues(ws.uuid, ws.product).Inc()
 			}
 		case <-time.After(time.Second * 4):
 			// Something is wrong, websocket has not been responding for a fair amount of time. We should recreate the websocket
