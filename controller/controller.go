@@ -15,6 +15,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const ORDERBOOK_REPORT_TICKER_SECS = 2
 const CHANNEL_BUFFER_SIZE = 20
 const TS_LAYOUT = "2006-01-02T15:04:05.000000Z"
 
@@ -32,6 +33,11 @@ var (
 		Help:      "Counts heartbeats from the websocket feed",
 		Namespace: "feed",
 	}, []string{"uuid", "market"})
+	orderbookDepthGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name:      "orderbookDepth",
+		Help:      "Orderbook Depth",
+		Namespace: "feed",
+	}, []string{"uuid", "market", "side"})
 )
 
 type FeedController struct {
@@ -77,8 +83,24 @@ func (fc *FeedController) Start() error {
 	fc.websocket = datasource.NewCoinbaseProWebsocket(fc.product, fc.outChan, fc.inChan, fc.ctx)
 	fc.websocket.Start()
 
+	go fc.runOrderbookReporter()
 	go fc.runLoop()
 	return nil
+}
+
+func (fc *FeedController) runOrderbookReporter() {
+	timer := time.NewTicker(ORDERBOOK_REPORT_TICKER_SECS * time.Second)
+	for {
+		select {
+		case <-fc.ctx.Done():
+			log.Warning("Orderbook reporter shutdown")
+			return
+		case <-timer.C:
+			bids, asks := fc.orderbook.GetBookCount()
+			orderbookDepthGauge.WithLabelValues(fc.uuid, fc.product, "bids").Set(float64(bids))
+			orderbookDepthGauge.WithLabelValues(fc.uuid, fc.product, "asks").Set(float64(asks))
+		}
+	}
 }
 
 func (fc *FeedController) runLoop() {
