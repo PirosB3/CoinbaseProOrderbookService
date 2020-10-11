@@ -8,11 +8,36 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	log "github.com/sirupsen/logrus"
 )
 
+var (
+	pricingProm = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "pricing",
+		Help: "Orderbook visualization for 50 ETH",
+	}, []string{"uuid", "market"})
+
+	updatesCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "updates",
+		Help: "Shows the frequency of orderbook updates coming out of the websocket",
+	}, []string{"uuid", "market"})
+
+	timeoutsCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "timeout",
+		Help: "Shows the frequency of timeouts",
+	}, []string{"uuid", "market"})
+	wsLatency = promauto.NewSummaryVec(prometheus.SummaryOpts{
+		Name: "websocketUpdateFrequency",
+		Help: "Shows the frequency of websocket responses",
+	}, []string{"uuid", "market"})
+)
+
 type CoinbaseProWebsocket struct {
+	uuid                string
 	startLock           sync.Mutex
 	websocketConn       *websocket.Conn
 	product             string
@@ -25,7 +50,9 @@ type CoinbaseProWebsocket struct {
 }
 
 func NewCoinbaseProWebsocket(product string, outChan chan (map[string]interface{}), inChan chan (interface{}), ctx context.Context) *CoinbaseProWebsocket {
+	aUUID, _ := uuid.NewUUID()
 	return &CoinbaseProWebsocket{
+		uuid:                aUUID.String(),
 		product:             product,
 		running:             false,
 		ctx:                 ctx,
@@ -66,12 +93,14 @@ func (ws *CoinbaseProWebsocket) runLoop() {
 			ws.timeoutInternalChan <- true
 			return
 		case msgIn := <-ws.inChan:
+			// Some other process is trying to write a message to the websocket
 			if ws.websocketConn == nil {
 				log.Fatalln("Configured websocket does not exist, this should never happen. Message was skipped")
 			}
 			ws.websocketConn.WriteJSON(msgIn)
 		case msgOut := <-ws.outInternalChan:
-			// A message should be broadcasted to the outside.
+			// A message should be broadcasted to the outside. Writes the message to an outbound queue without blocking
+			updatesCounter.WithLabelValues(ws.uuid, ws.product).Inc()
 			select {
 			case ws.outChan <- msgOut:
 			default:
@@ -79,6 +108,7 @@ func (ws *CoinbaseProWebsocket) runLoop() {
 			}
 		case <-time.After(time.Second * 4):
 			// Something is wrong, websocket has not been responding for a fair amount of time. We should recreate the websocket
+			timeoutsCounter.WithLabelValues(ws.uuid, ws.product).Inc()
 			ws.timeoutInternalChan <- true
 			go ws.setupWebsocket()
 		}
@@ -106,6 +136,7 @@ func (ws *CoinbaseProWebsocket) setupWebsocket() {
 	ws.websocketConn = connection
 	connection.WriteJSON(ws.makeSubscriptionMessage())
 	for {
+		start := time.Now().Unix()
 		var wsType map[string]interface{}
 		err := connection.ReadJSON(&wsType)
 		if err != nil {
@@ -114,6 +145,8 @@ func (ws *CoinbaseProWebsocket) setupWebsocket() {
 			return
 		}
 		ws.outInternalChan <- wsType
+		end := time.Now().Unix()
+		wsLatency.WithLabelValues(ws.uuid, ws.product).Observe(float64(end - start))
 	}
 }
 
