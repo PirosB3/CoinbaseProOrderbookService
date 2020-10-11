@@ -45,3 +45,8 @@ type L2SnapshotMessage struct {
 	Bids      [][]string `json:"bids"`
 	Asks      [][]string `json:"asks"`
 }
+
+type OrderbookModel interface {
+	SetSnapshot(epoch int64, bids []*Update, asks []*Update) bool
+	WriteUpdate(epoch int64, bids []*Update, asks []*Update) bool
+}

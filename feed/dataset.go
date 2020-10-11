@@ -21,7 +21,7 @@ type OrderbookFeed struct {
 	bids, asks               sortByOrderbookPrice
 	bidsSizeMap, asksSizeMap map[string]float64
 	lastEpochSeen            int64
-	updateLock               *sync.Mutex
+	updateLock               *sync.RWMutex
 }
 
 func (of *OrderbookFeed) GetProduct() (string, string) {
@@ -49,7 +49,9 @@ func (of *OrderbookFeed) performMarketOperationOnQuote(amount float64, book sort
 			break
 		}
 
+		of.updateLock.RLock()
 		size, ok := sizeMap[orderSet.Key]
+		of.updateLock.RUnlock()
 		if !ok {
 			log.WithField("key", orderSet.Key).Errorln("Key cannot be found in lookup table.")
 			continue
@@ -87,7 +89,10 @@ func (of *OrderbookFeed) performMarketOperationOnBase(amount float64, book sortB
 	profitMade := 0.0
 	for _, orderSet := range book {
 
+		of.updateLock.RLock()
 		orderSize := sizeMap[orderSet.Key]
+		of.updateLock.RUnlock()
+
 		amountToConsume := orderSize
 		if remainingAmt <= amountToConsume {
 			amountToConsume = remainingAmt
@@ -154,8 +159,6 @@ func (of *OrderbookFeed) GetBookCount() (int, int) {
 
 func (of *OrderbookFeed) setData(epoch int64, bids []*Update, asks []*Update, recreate bool) bool {
 	// Initiate a lock
-	of.updateLock.Lock()
-	defer of.updateLock.Unlock()
 
 	if epoch < of.lastEpochSeen {
 		return false
@@ -170,8 +173,10 @@ func (of *OrderbookFeed) setData(epoch int64, bids []*Update, asks []*Update, re
 	}
 
 	// Write a fresh batch of updates
+	of.updateLock.Lock()
 	containsNewInsertsBids := of.writeUpdate(bids, BIDS)
 	containsNewInsertsAsks := of.writeUpdate(asks, ASKS)
+	of.updateLock.Unlock()
 
 	// Sort the results after the update was written
 	if containsNewInsertsBids {
@@ -199,7 +204,7 @@ func NewOrderbookFeed(productId string) *OrderbookFeed {
 	return &OrderbookFeed{
 		ProductId:     productId,
 		lastEpochSeen: -1,
-		updateLock:    &sync.Mutex{},
+		updateLock:    &sync.RWMutex{},
 		asksSizeMap:   make(map[string]float64),
 		bidsSizeMap:   make(map[string]float64),
 	}
