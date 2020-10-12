@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"os"
 	"pirosb3/real_feed/controller"
 	"pirosb3/real_feed/rpc"
 
@@ -13,7 +14,7 @@ import (
 )
 
 func main() {
-	market := "ETH-USD"
+	market := os.Getenv("MARKET")
 	port := "8000"
 	ctx, _ := context.WithCancel(context.Background())
 
@@ -38,6 +39,6 @@ func main() {
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
-	log.WithField("port", port).Infoln("Starting gRPC server")
+	log.WithField("market", market).WithField("port", port).Infoln("Starting gRPC server")
 	grpcServer.Serve(lis)
 }

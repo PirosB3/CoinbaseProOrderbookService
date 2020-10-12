@@ -43,6 +43,28 @@ func (of *OrderbookFeed) SellQuote(amount float64) (float64, int64, error) {
 	return of.performMarketOperationOnQuote(amount, of.asks, of.asksSizeMap)
 }
 
+func (of *OrderbookFeed) CleanUpOrderbook() {
+	of.updateLock.Lock()
+	defer of.updateLock.Unlock()
+
+	// Process bids
+	var newBids, newAsks []*orderbookSortedKey
+	for _, bid := range of.bids {
+		bidSize := of.bidsSizeMap[bid.Key]
+		if bidSize > 0 {
+			newBids = append(newBids, bid)
+		}
+	}
+	for _, ask := range of.asks {
+		askSize := of.asksSizeMap[ask.Key]
+		if askSize > 0 {
+			newAsks = append(newAsks, ask)
+		}
+	}
+	of.bids = newBids
+	of.asks = newAsks
+}
+
 func (of *OrderbookFeed) performMarketOperationOnQuote(amount float64, book sortByOrderbookPrice, sizeMap map[string]float64) (float64, int64, error) {
 	if !of.snapshotWasSet {
 		return -1, of.lastEpochSeen, errors.New("A snapshot was never set, therefore the orderbook is inaccurate")

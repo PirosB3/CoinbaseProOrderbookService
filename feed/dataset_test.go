@@ -249,3 +249,41 @@ func TestSellQuoteWhenBookIsOld(t *testing.T) {
 		t.Error("Orderbook is stale but no error was raised")
 	}
 }
+
+func TestOrderbookCleanup(t *testing.T) {
+	ob := NewOrderbookFeed("ETH-DAI")
+	bids := []*Update{
+		&Update{Price: "333.2", Size: "0.5"},
+		&Update{Price: "320", Size: "0.5"},
+		&Update{Price: "310", Size: "1.5"},
+	}
+	asks := []*Update{
+		&Update{Price: "335.12", Size: "0.5"},
+	}
+	ob.SetSnapshot(time.Now().Unix(), bids, asks)
+
+	// Set price to 0
+	bids = []*Update{
+		&Update{Price: "333.2", Size: "0"},
+	}
+	ob.WriteUpdate(time.Now().Unix(), bids, asks)
+
+	// Rows should still return 3 count
+	p1, _, _ := ob.SellQuote(50)
+	numBids, _ := ob.GetBookCount()
+	if numBids != 3 {
+		t.Errorf("Expected 3 bids, got %d", numBids)
+	}
+
+	// Clean up orderboo
+	ob.CleanUpOrderbook()
+	numBids, _ = ob.GetBookCount()
+	if numBids != 2 {
+		t.Errorf("Expected 2 bids, got %d", numBids)
+	}
+	p2, _, _ := ob.SellQuote(50)
+	if p2 != p1 {
+		t.Fail()
+	}
+
+}

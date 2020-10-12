@@ -96,6 +96,8 @@ func (fc *FeedController) runOrderbookReporter() {
 			log.Warning("Orderbook reporter shutdown")
 			return
 		case <-timer.C:
+			fc.orderbook.CleanUpOrderbook()
+
 			bids, asks := fc.orderbook.GetBookCount()
 			orderbookDepthGauge.WithLabelValues(fc.uuid, fc.product, "bids").Set(float64(bids))
 			orderbookDepthGauge.WithLabelValues(fc.uuid, fc.product, "asks").Set(float64(asks))

@@ -14,3 +14,6 @@ RUN go install
 
 # Compile protocol buffers and gRPC service
 RUN make install
+
+# Set endpoint
+ENTRYPOINT [ "real_feed" ]
