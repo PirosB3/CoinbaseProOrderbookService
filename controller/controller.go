@@ -171,15 +171,15 @@ func (fc *FeedController) Stop() {
 	}
 }
 
-func (fc *FeedController) BuyQuote(amount float64) (float64, error) {
+func (fc *FeedController) BuyQuote(amount float64) (float64, int64, error) {
 	return fc.orderbook.BuyQuote(amount)
 }
-func (fc *FeedController) SellQuote(amount float64) (float64, error) {
+func (fc *FeedController) SellQuote(amount float64) (float64, int64, error) {
 	return fc.orderbook.SellQuote(amount)
 }
-func (fc *FeedController) BuyBase(amount float64) (float64, error) {
+func (fc *FeedController) BuyBase(amount float64) (float64, int64, error) {
 	return fc.orderbook.BuyBase(amount)
 }
-func (fc *FeedController) SellBase(amount float64) (float64, error) {
+func (fc *FeedController) SellBase(amount float64) (float64, int64, error) {
 	return fc.orderbook.SellBase(amount)
 }

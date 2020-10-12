@@ -35,23 +35,23 @@ func (of *OrderbookFeed) GetProduct() (string, string) {
 	return items[0], items[1]
 }
 
-func (of *OrderbookFeed) BuyQuote(amount float64) (float64, error) {
+func (of *OrderbookFeed) BuyQuote(amount float64) (float64, int64, error) {
 	return of.performMarketOperationOnQuote(amount, of.bids, of.bidsSizeMap)
 }
 
-func (of *OrderbookFeed) SellQuote(amount float64) (float64, error) {
+func (of *OrderbookFeed) SellQuote(amount float64) (float64, int64, error) {
 	return of.performMarketOperationOnQuote(amount, of.asks, of.asksSizeMap)
 }
 
-func (of *OrderbookFeed) performMarketOperationOnQuote(amount float64, book sortByOrderbookPrice, sizeMap map[string]float64) (float64, error) {
+func (of *OrderbookFeed) performMarketOperationOnQuote(amount float64, book sortByOrderbookPrice, sizeMap map[string]float64) (float64, int64, error) {
 	if !of.snapshotWasSet {
-		return -1, errors.New("A snapshot was never set, therefore the orderbook is inaccurate")
+		return -1, of.lastEpochSeen, errors.New("A snapshot was never set, therefore the orderbook is inaccurate")
 	}
 	if (time.Now().Unix() - of.lastEpochSeen) > TIMEOUT_STALE_BOOK {
-		return -1, errors.New("Orderbook is stale")
+		return -1, of.lastEpochSeen, errors.New("Orderbook is stale")
 	}
 	if amount <= 0 {
-		return -1, errors.New("Amount invalid")
+		return -1, of.lastEpochSeen, errors.New("Amount invalid")
 	}
 
 	remaining := amount
@@ -80,29 +80,29 @@ func (of *OrderbookFeed) performMarketOperationOnQuote(amount float64, book sort
 		baseAmountToPay += amountToPurchase / orderSet.Value
 	}
 	if remaining == 0 {
-		return baseAmountToPay, nil
+		return baseAmountToPay, of.lastEpochSeen, nil
 	}
 
-	return -1, errors.New(INSUFFICIENT_LIQUIDITY)
+	return -1, of.lastEpochSeen, errors.New(INSUFFICIENT_LIQUIDITY)
 }
 
-func (of *OrderbookFeed) BuyBase(amount float64) (float64, error) {
+func (of *OrderbookFeed) BuyBase(amount float64) (float64, int64, error) {
 	return of.performMarketOperationOnBase(amount, of.asks, of.asksSizeMap)
 }
 
-func (of *OrderbookFeed) SellBase(amount float64) (float64, error) {
+func (of *OrderbookFeed) SellBase(amount float64) (float64, int64, error) {
 	return of.performMarketOperationOnBase(amount, of.bids, of.bidsSizeMap)
 }
 
-func (of *OrderbookFeed) performMarketOperationOnBase(amount float64, book sortByOrderbookPrice, sizeMap map[string]float64) (float64, error) {
+func (of *OrderbookFeed) performMarketOperationOnBase(amount float64, book sortByOrderbookPrice, sizeMap map[string]float64) (float64, int64, error) {
 	if !of.snapshotWasSet {
-		return -1, errors.New("A snapshot was never set, therefore the orderbook is inaccurate")
+		return -1, of.lastEpochSeen, errors.New("A snapshot was never set, therefore the orderbook is inaccurate")
 	}
 	if (time.Now().Unix() - of.lastEpochSeen) > TIMEOUT_STALE_BOOK {
-		return -1, errors.New("Orderbook is stale")
+		return -1, of.lastEpochSeen, errors.New("Orderbook is stale")
 	}
 	if amount <= 0 {
-		return -1, errors.New("Amount invalid")
+		return -1, of.lastEpochSeen, errors.New("Amount invalid")
 	}
 	remainingAmt := amount
 	profitMade := 0.0
@@ -120,7 +120,7 @@ func (of *OrderbookFeed) performMarketOperationOnBase(amount float64, book sortB
 		profitMade += amountToConsume * orderSet.Value
 
 		if remainingAmt < 0 {
-			return -1, errors.New("Implementation error")
+			return -1, of.lastEpochSeen, errors.New("Implementation error")
 		}
 
 		if remainingAmt <= 0 {
@@ -129,9 +129,9 @@ func (of *OrderbookFeed) performMarketOperationOnBase(amount float64, book sortB
 
 	}
 	if remainingAmt == 0 {
-		return profitMade, nil
+		return profitMade, of.lastEpochSeen, nil
 	}
-	return -1, errors.New(INSUFFICIENT_LIQUIDITY)
+	return -1, of.lastEpochSeen, errors.New(INSUFFICIENT_LIQUIDITY)
 }
 
 func (of *OrderbookFeed) writeUpdate(updates []*Update, side string) bool {

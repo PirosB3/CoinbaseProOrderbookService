@@ -2,34 +2,42 @@ package main
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"pirosb3/real_feed/controller"
-	"time"
+	"pirosb3/real_feed/rpc"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 )
 
 func main() {
+	market := "ETH-USD"
+	port := "8000"
 	ctx, _ := context.WithCancel(context.Background())
 
-	fc2 := controller.NewFeedController(ctx, "BTC-USD")
-	fc2.Start()
+	// Start feed controller
+	fc := controller.NewFeedController(ctx, market)
+	fc.Start()
 
-	fc1 := controller.NewFeedController(ctx, "ETH-USD")
-	fc1.Start()
-
+	// Start prometheus server
 	go func() {
-		for {
-			time.Sleep(time.Second * 3)
-			quoteAmount, err := fc1.BuyBase(50)
-			if err != nil {
-				log.WithField("err", err.Error()).Errorln("Error performing trade")
-			}
-			log.WithField("baseAmount", 50).WithField("quoteAmount", quoteAmount).Infoln("Buy base")
-		}
+		http.Handle("/metrics", promhttp.Handler())
+		http.ListenAndServe(":2112", nil)
 	}()
 
-	http.Handle("/metrics", promhttp.Handler())
-	http.ListenAndServe(":2112", nil)
+	// Create wrapper service
+	orderbookController := controller.NewOrderbookGrpcController(fc, market)
+
+	// Start gRPC server
+	grpcServer := grpc.NewServer()
+	rpc.RegisterOrderbookServiceServer(grpcServer, *orderbookController)
+	// ... // determine whether to use TLS
+	lis, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+	log.WithField("port", port).Infoln("Starting gRPC server")
+	grpcServer.Serve(lis)
 }

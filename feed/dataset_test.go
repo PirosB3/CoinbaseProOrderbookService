@@ -19,7 +19,7 @@ func TestCanInitialize(t *testing.T) {
 func TestFailsForGetPrice(t *testing.T) {
 	ob := NewOrderbookFeed("ETH-DAI")
 	ob.SetSnapshot(time.Now().Unix(), []*Update{}, []*Update{})
-	_, err := ob.SellBase(1.2)
+	_, _, err := ob.SellBase(1.2)
 	if err == nil {
 		t.Error("Expected error to exist, but it was nil")
 	}
@@ -48,7 +48,7 @@ func TestAddItem(t *testing.T) {
 		t.Errorf("Num bids expected as 3, but was %d. Num asks expected was 1, but was %d", numBids, numAsks)
 	}
 
-	result, err := ob.SellBase(0.6)
+	result, _, err := ob.SellBase(0.6)
 	if err != nil {
 		t.Error(err.Error())
 	}
@@ -69,7 +69,7 @@ func TestUpdate(t *testing.T) {
 		&Update{Price: "333.2", Size: "0.5"},
 		&Update{Price: "310", Size: "1.5"},
 	}, []*Update{})
-	result, err := ob.SellBase(0.6)
+	result, _, err := ob.SellBase(0.6)
 	if err != nil {
 		t.Error(err.Error())
 	}
@@ -79,7 +79,7 @@ func TestUpdate(t *testing.T) {
 	ob.WriteUpdate(time.Now().Unix(), []*Update{
 		&Update{Price: "320", Size: "0.5"},
 	}, []*Update{})
-	result, err = ob.SellBase(0.6)
+	result, _, err = ob.SellBase(0.6)
 	if err != nil {
 		t.Error(err.Error())
 	}
@@ -90,7 +90,7 @@ func TestUpdate(t *testing.T) {
 	ob.WriteUpdate(time.Now().Unix(), []*Update{
 		&Update{Price: "333.2", Size: "1.5"},
 	}, []*Update{})
-	result, err = ob.SellBase(0.6)
+	result, _, err = ob.SellBase(0.6)
 	if err != nil {
 		t.Error(err.Error())
 	}
@@ -112,7 +112,7 @@ func TestBuyBase(t *testing.T) {
 	}
 	timestamp := time.Now().Unix()
 	ob.SetSnapshot(timestamp, bids, asks)
-	result, err := ob.BuyBase(0.2)
+	result, _, err := ob.BuyBase(0.2)
 	if err != nil {
 		t.Error(err.Error())
 	}
@@ -134,7 +134,7 @@ func TestBuyQuote(t *testing.T) {
 	timestamp := time.Now().Unix()
 	ob.SetSnapshot(timestamp, bids, asks)
 
-	result, err := ob.BuyQuote(200)
+	result, _, err := ob.BuyQuote(200)
 	if err != nil {
 		t.Error(err.Error())
 	}
@@ -156,7 +156,7 @@ func TestSellQuote(t *testing.T) {
 	timestamp := time.Now().Unix()
 	ob.SetSnapshot(timestamp, bids, asks)
 
-	result, err := ob.SellQuote(50)
+	result, _, err := ob.SellQuote(50)
 	if err != nil {
 		t.Error(err.Error())
 	}
@@ -170,8 +170,8 @@ func TestErrorWillReturnIfNoSnapshotWasEverSet(t *testing.T) {
 	ob.WriteUpdate(1, []*Update{
 		&Update{Price: "333.2", Size: "1.5"},
 	}, []*Update{})
-	_, err1 := ob.SellBase(0.6)
-	_, err2 := ob.BuyBase(0.6)
+	_, _, err1 := ob.SellBase(0.6)
+	_, _, err2 := ob.BuyBase(0.6)
 	if err1 == nil || err2 == nil {
 		t.Error("No orderbook operations should be allowed if a snapshot was never set")
 	}
@@ -194,8 +194,8 @@ func TestEndToEnd(t *testing.T) {
 	ob.SetSnapshot(time.Now().Unix(), bids, asks)
 
 	for i := 10; i < 400; i += 10 {
-		quoteObtained, _ := ob.SellBase(float64(i))
-		baseObtained, _ := ob.BuyQuote(quoteObtained)
+		quoteObtained, _, _ := ob.SellBase(float64(i))
+		baseObtained, _, _ := ob.BuyQuote(quoteObtained)
 
 		if math.Round(baseObtained) != float64(i) {
 			t.Errorf("Expcted %d but got %f", i, baseObtained)
@@ -239,12 +239,12 @@ func TestSellQuoteWhenBookIsOld(t *testing.T) {
 	timestamp := time.Now().Unix() - 6
 	ob.SetSnapshot(timestamp, bids, asks)
 
-	_, err := ob.SellQuote(50)
+	_, _, err := ob.SellQuote(50)
 	if err == nil || err.Error() != "Orderbook is stale" {
 		t.Error("Orderbook is stale but no error was raised")
 	}
 
-	_, err = ob.SellBase(50)
+	_, _, err = ob.SellBase(50)
 	if err == nil || err.Error() != "Orderbook is stale" {
 		t.Error("Orderbook is stale but no error was raised")
 	}

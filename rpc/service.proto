@@ -1,0 +1,24 @@
+syntax = "proto3";
+option go_package = "pirosb3/real_feed/rpc";
+
+service OrderbookService {
+  // Sends a greeting
+  rpc BuyBase (PricingRequest) returns (PricingResponse) {}
+  rpc BuyQuote (PricingRequest) returns (PricingResponse) {}
+  rpc SellBase (PricingRequest) returns (PricingResponse) {}
+  rpc SellQuote (PricingRequest) returns (PricingResponse) {}
+}
+
+// The request message containing the user's name.
+message PricingRequest {
+  string product = 1;
+  float inAmount = 2;
+}
+
+// The response message containing the greetings
+message PricingResponse {
+  string product = 1;
+  float outAmount = 2;
+  int64 lastUpdated = 3;
+  string error = 4;
+}
