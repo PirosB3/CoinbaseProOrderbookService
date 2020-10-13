@@ -8,6 +8,17 @@ import (
 	"time"
 )
 
+func transformToUpdate(input [][]interface{}) []*Update {
+	newUpdates := make([]*Update, len(input))
+	for idx, val := range input {
+		newUpdates[idx] = &Update{
+			Price: val[0].(string),
+			Size:  val[1].(string),
+		}
+	}
+	return newUpdates
+}
+
 func TestCanInitialize(t *testing.T) {
 	ob := NewOrderbookFeed("ETH-DAI")
 	base, quote := ob.GetProduct()
@@ -189,8 +200,8 @@ func TestEndToEnd(t *testing.T) {
 	decoder.Decode(&l2Data)
 
 	ob := NewOrderbookFeed("ETH-DAI")
-	bids := TransformToUpdate(l2Data.Bids)
-	asks := TransformToUpdate(l2Data.Asks)
+	bids := transformToUpdate(l2Data.Bids)
+	asks := transformToUpdate(l2Data.Asks)
 	ob.SetSnapshot(time.Now().Unix(), bids, asks)
 
 	for i := 10; i < 400; i += 10 {
