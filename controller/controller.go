@@ -80,7 +80,7 @@ func (fc *FeedController) Start() error {
 	defer fc.startLock.Unlock()
 
 	fc.started = true
-	fc.websocket = datasource.NewCoinbaseProWebsocket(fc.product, fc.outChan, fc.inChan, fc.ctx)
+	fc.websocket = datasource.NewCoinbaseProWebsocket(fc.ctx, fc.product, fc.outChan, fc.inChan)
 	fc.websocket.Start()
 
 	go fc.runOrderbookReporter()

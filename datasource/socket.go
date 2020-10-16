@@ -15,6 +15,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const heartbeatTTLSeconds = 4
+
 var (
 	pricingProm = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name:      "pricing",
@@ -59,7 +61,17 @@ type CoinbaseProWebsocket struct {
 	timeoutInternalChan chan (bool)
 }
 
-func NewCoinbaseProWebsocket(product string, outChan chan (map[string]interface{}), inChan chan (interface{}), ctx context.Context) *CoinbaseProWebsocket {
+// NewCoinbaseProWebsocket creates a new Coinbase Pro websocket feed. The feed will only start running once `.Start()` is called on the websocket.
+// The `product` should be a Coinbase Pro ticket (example: "ETH-USD"), the `outChan` and `inChan` passed in allow the feed to send / receive messages
+// and allow any external component to interact with the websocket service.
+// This websocket is also fault-tolerant, if an update is not received within `heartbeatTTLSeconds` seconds, the websocket is automatically re-created.
+// To shutdown the websocket, simply cancel the context passed in as first argument.
+func NewCoinbaseProWebsocket(
+	ctx context.Context,
+	product string,
+	outChan chan (map[string]interface{}),
+	inChan chan (interface{}),
+) *CoinbaseProWebsocket {
 	aUUID, _ := uuid.NewUUID()
 	return &CoinbaseProWebsocket{
 		uuid:                aUUID.String(),
@@ -111,7 +123,7 @@ func (ws *CoinbaseProWebsocket) runLoop() {
 				log.Warningln("Websocket has no consumer for outgoing messages, dropping the message.")
 				droppedPacketsCounter.WithLabelValues(ws.uuid, ws.product).Inc()
 			}
-		case <-time.After(time.Second * 4):
+		case <-time.After(time.Second * heartbeatTTLSeconds):
 			// Something is wrong, websocket has not been responding for a fair amount of time. We should recreate the websocket
 			timeoutsCounter.WithLabelValues(ws.uuid, ws.product).Inc()
 			ws.timeoutInternalChan <- true
@@ -155,6 +167,8 @@ func (ws *CoinbaseProWebsocket) setupWebsocket() {
 	}
 }
 
+// Start starts running the underlying websocket service. The function call does not block but
+// it starts a series of underlying goroutines that are respoonsible for handling the websockets.
 func (ws *CoinbaseProWebsocket) Start() error {
 	ws.startLock.Lock()
 	defer ws.startLock.Unlock()
